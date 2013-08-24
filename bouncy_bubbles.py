@@ -44,7 +44,7 @@ class Ball(graphics.Circle):
         self.x += self.vx
         self.y += self.vy
 
-        # bounce of the walls
+        # bounce off the walls
         if self.x - self.width < 0 or self.x + self.width > width:
             self.vx = self.vx * FRICTION
 
@@ -55,7 +55,7 @@ class Ball(graphics.Circle):
         self.y = max(self.height, min(self.y, height - self.height))
 
 
-    def colide(self, others):
+    def collide(self, others):
         for ball in others:
             if ball == self:
                 continue
@@ -107,7 +107,7 @@ class Scene(graphics.Scene):
 
         for ball in self.balls:
             ball.move(self.width, self.height)
-            ball.colide(self.balls)
+            ball.collide(self.balls)
 
 
         window_pos = self.get_toplevel().get_position()
