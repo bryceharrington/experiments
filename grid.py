@@ -12,6 +12,7 @@ class GridElement(object):
         self.__graphic = None
         self.i = i
         self.j = j
+        self.interleaved = False
 
     def set_origin(self, x, y):
         self.graphic.x = x
@@ -61,6 +62,9 @@ class Grid(graphics.Sprite):
             return None
         return self.__elements[i][j]
 
+    def set(self, i, j, e):
+        self.__elements[i][j] = e
+
     def on_render(self, widget):
         x = 0
         y = 0
@@ -73,25 +77,35 @@ class Grid(graphics.Sprite):
                 e.graphic.on_render(widget)
                 y += self.y_spacing
 
-            # For an offset grid (hexagons, triangles, etc.)
-            # TODO: Is this needed for a square grid?
-            if e.i % 2 == 0:
-                y = 0
-            else:
-                y -= self.y_spacing/2
+            # TODO: Maybe move this into the Element class
+            if e.interleaved:
+                # For an offset grid (hexagons, triangles, etc.)
+                if e.i % 2 == 0:
+                    y = 0
+                else:
+                    y -= self.y_spacing/2
             y = 0
             x += self.x_spacing
 
+    # TODO: Maybe change this to an __iter__ and yield?
+    def elements(self):
+        for row in self.__elements.values():
+            for col in row.values():
+                yield col
 
 class Triangle(graphics.Sprite):
-    def __init__(self, width=100, height=100, color_foreground="#333", color_stroke="#000", stroke_width=2):
+    def __init__(self, i, j, width=100, height=100, color_foreground="#333", color_stroke="#000", stroke_width=2, on_click=None):
         graphics.Sprite.__init__(self)
+        self.i = i
+        self.j = j
         self.width = width
         self.height = height
         self.stroke_width = stroke_width
         self.color_foreground = color_foreground
         self.color_stroke = color_stroke
         self.connect('on-render', self.on_render)
+        if on_click is not None:
+            self.connect('on-click', on_click)
 
     def on_render(self, sprite):
         self.graphics.clear()
@@ -105,9 +119,37 @@ class Triangle(graphics.Sprite):
         self.graphics.stroke(self.color_stroke)
 
 
+class Rectangle(graphics.Sprite):
+    def __init__(self, i, j, width=100, height=100, color_foreground="#333", color_stroke="#000", stroke_width=2, on_click=None):
+        graphics.Sprite.__init__(self)
+        self.i = i
+        self.j = j
+        self.width = width
+        self.height = height
+        self.stroke_width = stroke_width
+        self.color_foreground = color_foreground
+        self.color_stroke = color_stroke
+        self.connect('on-render', self.on_render)
+        if on_click is not None:
+            self.connect('on-click', on_click)
+
+    def on_render(self, sprite):
+        self.graphics.clear()
+        self.graphics.move_to(0,0)
+        self.graphics.line_to(self.width, 0)
+        self.graphics.line_to(self.width, -1 * self.height)
+        self.graphics.line_to(0, -1 * self.height)
+        self.graphics.line_to(0,0)
+        self.graphics.set_line_style(self.stroke_width)
+        self.graphics.close_path()
+        self.graphics.fill_preserve(self.color_foreground)
+        self.graphics.stroke(self.color_stroke)
+
+
 class TriangularGridElement(GridElement):
     def __init__(self, i,j, height,width, **args):
         GridElement.__init__(self, i,j)
+        self.interleaved = True
         self.height = height
         self.width = width
         self.args = args
@@ -119,18 +161,39 @@ class TriangularGridElement(GridElement):
             GridElement.set_origin(self, x, y)
 
     def draw(self):
-        t = Triangle(self.width, self.height, **self.args)
+        t = Triangle(self.i, self.j, self.width, self.height, **self.args)
         t.interactive = True
         if self.i % 2 == 0:
-            t.height = - t.height
+            t.height = -1 * t.height
+        return t
+
+class RectangularGridElement(GridElement):
+    def __init__(self, i,j, height,width, **args):
+        GridElement.__init__(self, i,j)
+        self.height = height
+        self.width = width
+        self.args = args
+
+    def set_origin(self, x,y):
+        GridElement.set_origin(self, x, y)
+
+    def draw(self):
+        t = Rectangle(self.i, self.j, self.width, self.height, **self.args)
+        t.interactive = True
         return t
 
 
 class Scene(graphics.Scene):
+    ELEMENT_CLASSES = [
+        RectangularGridElement,
+        TriangularGridElement
+        ]
+
     def __init__(self, width, height):
         graphics.Scene.__init__(self)
         bg = graphics.Rectangle(
             width, height, 0, fill="#000")
+        self.element_number = 0
         self.add_child(bg)
 
         self.connect('on-mouse-over', self.on_mouse_over)
@@ -139,29 +202,64 @@ class Scene(graphics.Scene):
 
     def create_grid(self, width, height):
         self.size = 60
-        self.grid = Grid(x=80, y=80, x_spacing=self.size/2, y_spacing=self.size)
+        self.grid = Grid(x=80, y=80, x_spacing=self.size, y_spacing=self.size)
         self.add_child(self.grid)
 
-        cols = 2 * (width - 2 * self.grid.x) / self.size
+        cols = (width - 2 * self.grid.x) / self.size
         rows = 2 * (height - 4 *self.grid.y) / self.size
+        cls = self.ELEMENT_CLASSES[0]
         for i in range(0,cols):
             for j in range(0,rows):
                 if j % 2 == i % 2:
-                    e = TriangularGridElement(
-                        i,j, height=self.size, width=self.size,
-                        color_foreground="#060")
+                    e = cls(i,j, height=self.size, width=self.size,
+                            color_foreground="#060")
                 else:
-                    e = TriangularGridElement(
-                        i,j, height=self.size, width=self.size,
-                        color_foreground="#666")
+                    e = cls(i,j, height=self.size, width=self.size,
+                            color_foreground="#666")
                 self.grid.add(e)
+
+        e = self.grid.get(0, 0)
+        if e:
+            e.args['color_foreground'] = "#0a0"
+            e.args['on_click'] = self.prev_grid_type
+        e = self.grid.get(cols-1, 0)
+        if e:
+            e.args['color_foreground'] = "#0a0"
+            e.args['on_click'] = self.next_grid_type
+
+    def _set_grid_type(self, element_number):
+        self.element_number = element_number
+        cls = self.ELEMENT_CLASSES[self.element_number]
+        for e in self.grid.elements():
+            new_e = cls(e.i, e.j, self.size, self.size, **e.args)
+            self.grid.set(e.i, e.j, new_e)
+        if new_e.interleaved:
+            self.grid.x_spacing = self.size / 2
+        else:
+            self.grid.x_spacing = self.size
+
+        self.grid.on_render(new_e)
+        print len(self.grid.sprites)
+
+    def prev_grid_type(self, widget, event):
+        self._set_grid_type( (self.element_number - 1) % len(self.ELEMENT_CLASSES))
+
+    def next_grid_type(self, widget, event):
+        self._set_grid_type( (self.element_number + 1) % len(self.ELEMENT_CLASSES))
 
     def on_mouse_over(self, scene, sprite):
         if not sprite: return # ignore blank clicks
         if self.tweener.get_tweens(sprite): return
+        tmp = sprite.color_foreground
+        sprite.color_foreground = sprite.color_stroke
+        sprite.color_stroke = tmp
+        print sprite.i, sprite.j
 
     def on_mouse_out(self, scene, sprite):
         if not sprite: return # ignore blank clicks
+        tmp = sprite.color_foreground
+        sprite.color_foreground = sprite.color_stroke
+        sprite.color_stroke = tmp
 
 
 if __name__ == '__main__':
