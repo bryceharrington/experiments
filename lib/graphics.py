@@ -340,6 +340,12 @@ class Graphics(object):
         """draw arc going clockwise from start_angle to end_angle"""
         self._add_instruction(self._arc_negative, x, y, radius, start_angle, end_angle)
 
+    def triangle(self, x, y, width, height):
+        self.move_to(x, y)
+        self.line_to(width/2 + x, height + y)
+        self.line_to(width + x, y)
+        self.line_to(x, y)
+
     @staticmethod
     def _rounded_rectangle(context, x, y, x2, y2, corner_radius):
         if isinstance(corner_radius, (int, float)):
@@ -374,11 +380,23 @@ class Graphics(object):
         x2, y2 = x + width, y + height
         self._add_instruction(self._rounded_rectangle, x, y, x2, y2, corner_radius)
 
+    def hexagon(self, x, y, height):
+        side = height * 0.5
+        angle_x = side * 0.5
+        angle_y = side * 0.8660254
+        self.move_to(x, y)
+        self.line_to(x + side, y)
+        self.line_to(x + side + angle_x, y + angle_y)
+        self.line_to(x + side, y + 2*angle_y)
+        self.line_to(x, y + 2*angle_y)
+        self.line_to(x - angle_x, y + angle_y)
+        self.line_to(x, y)
+        self.close_path()
+
     def fill_area(self, x, y, width, height, color, opacity = 1):
         """fill rectangular area with specified color"""
         self.rectangle(x, y, width, height)
         self.fill(color, opacity)
-
 
     def fill_stroke(self, fill = None, stroke = None, opacity = 1, line_width = None):
         """fill and stroke the drawn area in one go"""

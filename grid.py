@@ -12,7 +12,6 @@ class GridElement(object):
         self.__graphic = None
         self.i = i
         self.j = j
-        self.interleaved = False
 
     def set_origin(self, x, y):
         self.graphic.x = x
@@ -73,17 +72,12 @@ class Grid(graphics.Sprite):
         for column in self.__elements.values():
             for e in column.values():
                 e.set_origin(x, y)
-                self.add_child(e.graphic)
-                e.graphic.on_render(widget)
-                y += self.y_spacing
-
-            # TODO: Maybe move this into the Element class
-            if e.interleaved:
-                # For an offset grid (hexagons, triangles, etc.)
-                if e.i % 2 == 0:
-                    y = 0
+                if type(e) == TriangularGridElement:
+                    e.on_render(e.graphic)
                 else:
-                    y -= self.y_spacing/2
+                    e.graphic.on_render(widget)
+                self.add_child(e.graphic)
+                y += self.y_spacing
             y = 0
             x += self.x_spacing
 
@@ -92,6 +86,7 @@ class Grid(graphics.Sprite):
         for row in self.__elements.values():
             for col in row.values():
                 yield col
+
 
 class Triangle(graphics.Sprite):
     def __init__(self, i, j, width=100, height=100, color_foreground="#333", color_stroke="#000", stroke_width=2, on_click=None):
@@ -103,20 +98,64 @@ class Triangle(graphics.Sprite):
         self.stroke_width = stroke_width
         self.color_foreground = color_foreground
         self.color_stroke = color_stroke
-        self.connect('on-render', self.on_render)
-        if on_click is not None:
-            self.connect('on-click', on_click)
+        #self.connect('on-render', self.on_render)
+        #if on_click is not None:
+        #    self.connect('on-click', on_click)
+
+class TriangularGridElement(GridElement):
+    x_spacing_factor = 0.5
+    y_spacing_factor = 1
+    def __init__(self, i,j, height,width, **args):
+        GridElement.__init__(self, i,j)
+        self.height = height
+        self.width = width
+        self.stroke_width = 2
+        self.color_foreground = args['color_foreground']
+        self.color_stroke = "#000"
+        self.args = args
+        self.args['stroke_width'] = 2
+        self.args['color_stroke'] = "#000"
+
+    def set_origin(self, x,y):
+        if self.i % 2 == 0:
+            GridElement.set_origin(self, x, y)
+        else:
+            GridElement.set_origin(self, x, y+self.height)
 
     def on_render(self, sprite):
-        self.graphics.clear()
-        self.graphics.move_to(0,0)
-        self.graphics.line_to(self.width/2, self.height)
-        self.graphics.line_to(self.width, 0)
-        self.graphics.line_to(0,0)
-        self.graphics.set_line_style(self.stroke_width)
-        self.graphics.close_path()
-        self.graphics.fill_preserve(self.color_foreground)
-        self.graphics.stroke(self.color_stroke)
+        sprite.graphics.clear()
+        if self.i % 2 == 1:
+            sprite.graphics.triangle(0,0, self.width,-1 * self.height)
+        else:
+            sprite.graphics.triangle(0,0, self.width,self.height)
+        sprite.graphics.set_line_style(self.stroke_width)
+        sprite.graphics.fill_preserve(self.color_foreground)
+        sprite.graphics.stroke(self.color_stroke)
+
+    def on_over(self, sprite):
+        if not sprite: return # ignore blank clicks
+        tmp = self.color_foreground
+        self.color_foreground = self.color_stroke
+        self.color_stroke = tmp
+        print sprite.i, sprite.j, type(sprite)
+
+    def on_out(self, sprite):
+        if not sprite: return # ignore blank clicks
+        tmp = self.color_foreground
+        self.color_foreground = self.color_stroke
+        self.color_stroke = tmp
+
+    def draw(self):
+        t = Triangle(self.i, self.j, self.width, self.height, **self.args)
+        t.interactive = True
+        t.connect('on-render', self.on_render)
+        t.connect('on-mouse-over', self.on_over)
+        t.connect('on-mouse-out', self.on_out)
+        if 'on_click' in self.args.keys():
+            t.connect('on-click', self.args['on_click'])
+        if self.i % 2 == 1:
+            t.height = -1 * t.height
+        return t
 
 
 class Rectangle(graphics.Sprite):
@@ -135,39 +174,15 @@ class Rectangle(graphics.Sprite):
 
     def on_render(self, sprite):
         self.graphics.clear()
-        self.graphics.move_to(0,0)
-        self.graphics.line_to(self.width, 0)
-        self.graphics.line_to(self.width, -1 * self.height)
-        self.graphics.line_to(0, -1 * self.height)
-        self.graphics.line_to(0,0)
+        self.graphics.rectangle(0, 0, self.width, self.height)
         self.graphics.set_line_style(self.stroke_width)
-        self.graphics.close_path()
         self.graphics.fill_preserve(self.color_foreground)
         self.graphics.stroke(self.color_stroke)
 
 
-class TriangularGridElement(GridElement):
-    def __init__(self, i,j, height,width, **args):
-        GridElement.__init__(self, i,j)
-        self.interleaved = True
-        self.height = height
-        self.width = width
-        self.args = args
-
-    def set_origin(self, x,y):
-        if self.i % 2 == 1:
-            GridElement.set_origin(self, x, y-self.height)
-        else:
-            GridElement.set_origin(self, x, y)
-
-    def draw(self):
-        t = Triangle(self.i, self.j, self.width, self.height, **self.args)
-        t.interactive = True
-        if self.i % 2 == 0:
-            t.height = -1 * t.height
-        return t
-
 class RectangularGridElement(GridElement):
+    x_spacing_factor = 1
+    y_spacing_factor = 1
     def __init__(self, i,j, height,width, **args):
         GridElement.__init__(self, i,j)
         self.height = height
@@ -183,10 +198,54 @@ class RectangularGridElement(GridElement):
         return t
 
 
+class Hexagon(graphics.Sprite):
+    def __init__(self, i, j, width=100, height=100, color_foreground="#333", color_stroke="#000", stroke_width=2, on_click=None):
+        graphics.Sprite.__init__(self)
+        self.i = i
+        self.j = j
+        self.width = width
+        self.height = height
+        self.stroke_width = stroke_width
+        self.color_foreground = color_foreground
+        self.color_stroke = color_stroke
+        self.connect('on-render', self.on_render)
+        if on_click is not None:
+            self.connect('on-click', on_click)
+
+    def on_render(self, sprite):
+        self.graphics.clear()
+        self.graphics.hexagon(0,0, self.height)
+        self.graphics.set_line_style(self.stroke_width)
+        self.graphics.fill_preserve(self.color_foreground)
+        self.graphics.stroke(self.color_stroke)
+
+
+class HexagonalGridElement(GridElement):
+    x_spacing_factor = 0.75
+    y_spacing_factor = 0.866
+    def __init__(self, i,j, height,width, **args):
+        GridElement.__init__(self, i,j)
+        self.height = height
+        self.width = width
+        self.args = args
+
+    def set_origin(self, x,y):
+        if self.i % 2 == 1:
+            GridElement.set_origin(self, x, y + self.height/2 * 0.866)
+        else:
+            GridElement.set_origin(self, x, y)
+
+    def draw(self):
+        t = Hexagon(self.i, self.j, self.width, self.height, **self.args)
+        t.interactive = True
+        return t
+
+
 class Scene(graphics.Scene):
     ELEMENT_CLASSES = [
         RectangularGridElement,
-        TriangularGridElement
+        HexagonalGridElement,
+        TriangularGridElement,
         ]
 
     def __init__(self, width, height):
@@ -195,29 +254,33 @@ class Scene(graphics.Scene):
             width, height, 0, fill="#000")
         self.element_number = 0
         self.add_child(bg)
+        self.size = 60
 
         self.connect('on-mouse-over', self.on_mouse_over)
         self.connect('on-mouse-out', self.on_mouse_out)
         self.create_grid(width, height)
 
     def create_grid(self, width, height):
-        self.size = 60
-        self.grid = Grid(x=80, y=80, x_spacing=self.size, y_spacing=self.size)
+        self.grid = Grid(x=40, y=40, x_spacing=self.size, y_spacing=self.size)
         self.add_child(self.grid)
 
         cols = (width - 2 * self.grid.x) / self.size
-        rows = 2 * (height - 4 *self.grid.y) / self.size
+        rows = (height - 4 *self.grid.y) / self.size
         cls = self.ELEMENT_CLASSES[0]
         for i in range(0,cols):
             for j in range(0,rows):
                 if j % 2 == i % 2:
-                    e = cls(i,j, height=self.size, width=self.size,
-                            color_foreground="#060")
+                    color = "#060"
                 else:
-                    e = cls(i,j, height=self.size, width=self.size,
-                            color_foreground="#666")
+                    color = "#666"
+                e = cls(i,j, height=self.size, width=self.size,
+                        color_foreground=color)
                 self.grid.add(e)
 
+        self.grid.x_spacing = self.size * e.x_spacing_factor
+        self.grid.y_spacing = self.size * e.y_spacing_factor
+
+        # Add next and forward links
         e = self.grid.get(0, 0)
         if e:
             e.args['color_foreground'] = "#0a0"
@@ -233,13 +296,9 @@ class Scene(graphics.Scene):
         for e in self.grid.elements():
             new_e = cls(e.i, e.j, self.size, self.size, **e.args)
             self.grid.set(e.i, e.j, new_e)
-        if new_e.interleaved:
-            self.grid.x_spacing = self.size / 2
-        else:
-            self.grid.x_spacing = self.size
-
+        self.grid.x_spacing = self.size * new_e.x_spacing_factor
+        self.grid.y_spacing = self.size * new_e.y_spacing_factor
         self.grid.on_render(new_e)
-        print len(self.grid.sprites)
 
     def prev_grid_type(self, widget, event):
         self._set_grid_type( (self.element_number - 1) % len(self.ELEMENT_CLASSES))
@@ -253,7 +312,7 @@ class Scene(graphics.Scene):
         tmp = sprite.color_foreground
         sprite.color_foreground = sprite.color_stroke
         sprite.color_stroke = tmp
-        print sprite.i, sprite.j
+        print sprite.i, sprite.j, type(sprite)
 
     def on_mouse_out(self, scene, sprite):
         if not sprite: return # ignore blank clicks
@@ -268,9 +327,9 @@ if __name__ == '__main__':
     class BasicWindow:
         def __init__(self):
             window = gtk.Window(gtk.WINDOW_TOPLEVEL)
-            window.set_default_size(800, 600)
+            window.set_default_size(800, 800)
             window.connect("delete_event", lambda *args: gtk.main_quit())
-            window.add(Scene(800, 600))
+            window.add(Scene(800, 800))
             window.show_all()
 
     window = BasicWindow()
