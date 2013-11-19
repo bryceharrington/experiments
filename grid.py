@@ -250,10 +250,8 @@ class Scene(graphics.Scene):
 
     def __init__(self, width, height):
         graphics.Scene.__init__(self)
-        bg = graphics.Rectangle(
-            width, height, 0, fill="#000")
+        self.background_color = "#000"
         self.element_number = 0
-        self.add_child(bg)
         self.size = 60
 
         self.connect('on-mouse-over', self.on_mouse_over)
