@@ -253,37 +253,44 @@ class Scene(graphics.Scene):
         self.background_color = "#000"
         self.element_number = 0
         self.size = 60
+        self.cols = 0
+        self.rows = 0
+        self.old_width = width
+        self.old_height = height
 
         self.connect('on-mouse-over', self.on_mouse_over)
         self.connect('on-mouse-out', self.on_mouse_out)
-        self.create_grid(width, height)
+        self.connect('on-resize', self.on_resize)
+        self.create_grid(50, 50, width-50, height-50)
 
-    def create_grid(self, width, height):
-        self.grid = Grid(x=40, y=40, x_spacing=self.size, y_spacing=self.size)
+    def create_element(self, cls, i, j):
+        if j % 2 == i % 2:
+            color = "#060"
+        else:
+            color = "#666"
+        e = cls(i, j, height=self.size, width=self.size, color_foreground=color)
+        self.grid.add(e)
+
+    def create_grid(self, x, y, width, height):
+        self.grid = Grid(x=x, y=y)
+        cls = self.ELEMENT_CLASSES[0]
+        self.grid.x_spacing = self.size * cls.x_spacing_factor
+        self.grid.y_spacing = self.size * cls.y_spacing_factor
         self.add_child(self.grid)
 
-        cols = (width - 2 * self.grid.x) / self.size
-        rows = (height - 4 *self.grid.y) / self.size
-        cls = self.ELEMENT_CLASSES[0]
-        for i in range(0,cols):
-            for j in range(0,rows):
-                if j % 2 == i % 2:
-                    color = "#060"
-                else:
-                    color = "#666"
-                e = cls(i,j, height=self.size, width=self.size,
-                        color_foreground=color)
-                self.grid.add(e)
-
-        self.grid.x_spacing = self.size * e.x_spacing_factor
-        self.grid.y_spacing = self.size * e.y_spacing_factor
+        self.cols = int(width / self.grid.x_spacing)
+        self.rows = int(height / self.grid.y_spacing)
+        print("Grid: %d x %d" %(self.cols, self.rows))
+        for i in range(0, self.cols):
+            for j in range(0, self.rows):
+                self.create_element(cls, i, j)
 
         # Add next and forward links
         e = self.grid.get(0, 0)
         if e:
             e.args['color_foreground'] = "#0a0"
             e.args['on_click'] = self.prev_grid_type
-        e = self.grid.get(cols-1, 0)
+        e = self.grid.get(self.cols-1, 0)
         if e:
             e.args['color_foreground'] = "#0a0"
             e.args['on_click'] = self.next_grid_type
@@ -303,6 +310,53 @@ class Scene(graphics.Scene):
 
     def next_grid_type(self, widget, event):
         self._set_grid_type( (self.element_number + 1) % len(self.ELEMENT_CLASSES))
+
+    def on_resize(self, scene, event):
+        cls = self.ELEMENT_CLASSES[self.element_number]
+
+        # Resize X
+        offset_x = (event.width - self.old_width)
+        size_x = self.size * cls.x_spacing_factor
+        if offset_x > size_x:
+            # Add more columns to the grid
+            num_new_columns = int(offset_x / size_x)
+            for i in range(self.cols, self.cols+num_new_columns):
+                for j in range(0, self.rows):
+                    self.create_element(cls, i,j)
+            self.cols += num_new_columns
+            offset_x -= num_new_columns * size_x
+        elif offset_x < -size_x:
+            num_removed_columns = int(offset_x / size_x)
+            for i in range(self.cols-num_removed_columns, self.cols):
+                self.grid.remove_column(i)
+            self.cols -= num_removed_columns
+            offset_x += num_removed_columns * size_x
+        self.grid.x += offset_x/2.0
+        self.old_width = event.width
+
+        # Resize Y
+        offset_y = event.height - self.old_height
+        print("offset_y: %d" %(offset_y))
+        size_y = self.size * cls.y_spacing_factor
+        if offset_y > size_y:
+            # Add more rows to the grid
+            num_new_rows = int(offset_y / size_y)
+            print "New rows: ", num_new_rows
+            for j in range(self.rows, self.rows+num_new_rows):
+                for i in range(0, self.cols):
+                    self.create_element(cls, i, j)
+            self.rows += num_new_rows
+            offset_y -= num_new_rows * size_y
+        elif offset_y < -size_y:
+            num_removed_rows = int(offset_y / size_y)
+            for j in range(self.rows-num_removed_rows, self.rows):
+                self.grid.remove_row(j)
+            self.rows -= num_removed_rows
+            offset_y += num_removed_rows * size_y
+        self.grid.y += offset_y/2.0
+        self.old_height = event.height
+
+        self.grid.on_render(scene)
 
     def on_mouse_over(self, scene, sprite):
         if not sprite: return # ignore blank clicks
@@ -332,4 +386,3 @@ if __name__ == '__main__':
 
     window = BasicWindow()
     gtk.main()
-
