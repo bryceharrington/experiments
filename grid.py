@@ -29,8 +29,9 @@ class GridElement(object):
         t.connect('on-render', self.on_render)
         t.connect('on-mouse-over', self.on_over)
         t.connect('on-mouse-out', self.on_out)
-        if 'on_click' in self.args.keys():
-            t.connect('on-click', self.args['on_click'])
+        on_click = self.args.get('on_click', None)
+        if on_click:
+            t.connect('on-click', on_click)
         return t
 
     def on_over(self, sprite):
@@ -104,6 +105,9 @@ class Grid(graphics.Sprite):
 
     def set(self, i, j, e):
         self.__elements[i][j] = e
+
+    def remove(self, i, j):
+        del self.__elements[i][j]
 
     def on_render(self, widget):
         x = 0
@@ -228,9 +232,14 @@ class Scene(graphics.Scene):
     def set_action(self, i, j, on_click):
         e = self.grid.get(i, j)
         if not e: return
-        e.color_foreground = "#0a0"
-        e.args['color_foreground'] = "#0a0"
-        e.args['on_click'] = self.prev_grid_type
+        e.args['on_click'] = on_click
+        if on_click:
+            e.color_foreground = "#0a0"
+        elif j % 2 == i % 2:
+            e.color_foreground = "#060"
+        else:
+            e.color_foreground = "#666"
+        e.args['color_foreground'] = e.color_foreground
 
     def create_grid(self, x, y, width, height):
         self.grid = Grid(x=x, y=y)
@@ -266,11 +275,15 @@ class Scene(graphics.Scene):
     def next_grid_type(self, widget, event):
         self._set_grid_type( (self.element_number + 1) % len(self.ELEMENT_CLASSES))
 
-    def on_resize(self, scene, event):
+    def _resize_grid(self, new_width, new_height):
         cls = self.ELEMENT_CLASSES[self.element_number]
 
+        # Remove all the links
+        self.set_action(0, 0, None)
+        self.set_action(self.cols-1, 0, None)
+
         # Resize X
-        offset_x = (event.width - self.old_width)
+        offset_x = new_width - self.old_width
         size_x = self.size * cls.x_spacing_factor
         if offset_x > size_x:
             # Add more columns to the grid
@@ -281,36 +294,44 @@ class Scene(graphics.Scene):
             self.cols += num_new_columns
             offset_x -= num_new_columns * size_x
         elif offset_x < -size_x:
-            num_removed_columns = int(offset_x / size_x)
+            # Remove unneeded columns
+            num_removed_columns = int(-1 * offset_x / size_x)
             for i in range(self.cols-num_removed_columns, self.cols):
-                self.grid.remove_column(i)
+                for j in range(0, self.rows):
+                    self.grid.remove(i, j)
             self.cols -= num_removed_columns
             offset_x += num_removed_columns * size_x
         self.grid.x += offset_x/2.0
-        self.old_width = event.width
+        self.old_width = new_width
 
         # Resize Y
-        offset_y = event.height - self.old_height
-        print("offset_y: %d" %(offset_y))
+        offset_y = new_height - self.old_height
         size_y = self.size * cls.y_spacing_factor
         if offset_y > size_y:
             # Add more rows to the grid
             num_new_rows = int(offset_y / size_y)
-            print "New rows: ", num_new_rows
             for j in range(self.rows, self.rows+num_new_rows):
                 for i in range(0, self.cols):
                     self.create_element(cls, i, j)
             self.rows += num_new_rows
             offset_y -= num_new_rows * size_y
         elif offset_y < -size_y:
-            num_removed_rows = int(offset_y / size_y)
+            # Remove unneeded rows
+            num_removed_rows = int(-1 * offset_y / size_y)
             for j in range(self.rows-num_removed_rows, self.rows):
-                self.grid.remove_row(j)
+                for i in range(0, self.cols):
+                    self.grid.remove(i, j)
             self.rows -= num_removed_rows
             offset_y += num_removed_rows * size_y
         self.grid.y += offset_y/2.0
-        self.old_height = event.height
+        self.old_height = new_height
 
+        # Re-add links in their new locations
+        self.set_action(0, 0, self.prev_grid_type)
+        self.set_action(self.cols-1, 0, self.next_grid_type)
+
+    def on_resize(self, scene, event):
+        self._resize_grid(event.width, event.height)
         self.grid.on_render(scene)
 
     def on_mouse_over(self, scene, sprite):
