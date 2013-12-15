@@ -1104,7 +1104,7 @@ class Sprite(Parent, gobject.GObject):
 
     def animate(self, duration = None, easing = None, on_complete = None,
                 on_update = None, round = False, **kwargs):
-        """Request paretn Scene to Interpolate attributes using the internal tweener.
+        """Request parent Scene to Interpolate attributes using the internal tweener.
            Specify sprite's attributes that need changing.
            `duration` defaults to 0.4 seconds and `easing` to cubic in-out
            (for others see pytweener.Easing class).
