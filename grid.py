@@ -204,10 +204,14 @@ class Scene(graphics.Scene):
         ]
 
     def __init__(self, width, height):
+        assert(width)
+        assert(height)
+
         graphics.Scene.__init__(self)
         self.background_color = "#000"
         self.element_number = 0
         self.size = 60
+        self.margin = 30
         self.cols = 0
         self.rows = 0
         self.old_width = width
@@ -216,7 +220,19 @@ class Scene(graphics.Scene):
         self.connect('on-mouse-over', self.on_mouse_over)
         self.connect('on-mouse-out', self.on_mouse_out)
         self.connect('on-resize', self.on_resize)
-        self.create_grid(50, 50, width-50, height-50)
+        self.create_grid(self.margin, self.margin, width-self.margin, height-self.margin)
+
+    def cols_visible(self):
+        w = self.width
+        if w is None:
+            w = self.old_width
+        return int( (w - 2*self.margin) / self.grid.x_spacing )
+
+    def rows_visible(self):
+        h = self.height
+        if h is None:
+            h = self.old_height
+        return int( (h - 2*self.margin) / self.grid.y_spacing )
 
     def create_element(self, cls, i, j):
         if j % 2 == i % 2:
@@ -248,8 +264,9 @@ class Scene(graphics.Scene):
         self.grid.y_spacing = self.size * cls.y_spacing_factor
         self.add_child(self.grid)
 
-        self.cols = int(width / self.grid.x_spacing)
-        self.rows = int(height / self.grid.y_spacing)
+        self.cols = self.cols_visible()
+        self.rows = self.rows_visible()
+
         #print("Grid: %d x %d" %(self.cols, self.rows))
         for i in range(0, self.cols):
             for j in range(0, self.rows):
@@ -267,6 +284,7 @@ class Scene(graphics.Scene):
             self.grid.set(e.i, e.j, new_e)
         self.grid.x_spacing = self.size * new_e.x_spacing_factor
         self.grid.y_spacing = self.size * new_e.y_spacing_factor
+        self._resize_grid()
         self.grid.on_render(new_e)
 
     def prev_grid_type(self, widget, event):
@@ -275,7 +293,7 @@ class Scene(graphics.Scene):
     def next_grid_type(self, widget, event):
         self._set_grid_type( (self.element_number + 1) % len(self.ELEMENT_CLASSES))
 
-    def _resize_grid(self, new_width, new_height):
+    def _resize_grid(self):
         cls = self.ELEMENT_CLASSES[self.element_number]
 
         # Remove all the links
@@ -283,55 +301,41 @@ class Scene(graphics.Scene):
         self.set_action(self.cols-1, 0, None)
 
         # Resize X
-        offset_x = new_width - self.old_width
-        size_x = self.size * cls.x_spacing_factor
-        if offset_x > size_x:
+        old_cols = self.cols
+        new_cols = self.cols_visible()
+        if new_cols > old_cols:
             # Add more columns to the grid
-            num_new_columns = int(offset_x / size_x)
-            for i in range(self.cols, self.cols+num_new_columns):
+            for i in range(old_cols, new_cols):
                 for j in range(0, self.rows):
                     self.create_element(cls, i,j)
-            self.cols += num_new_columns
-            offset_x -= num_new_columns * size_x
-        elif offset_x < -size_x:
+        elif new_cols < old_cols:
             # Remove unneeded columns
-            num_removed_columns = int(-1 * offset_x / size_x)
-            for i in range(self.cols-num_removed_columns, self.cols):
+            for i in range(new_cols, old_cols):
                 for j in range(0, self.rows):
                     self.grid.remove(i, j)
-            self.cols -= num_removed_columns
-            offset_x += num_removed_columns * size_x
-        self.grid.x += offset_x/2.0
-        self.old_width = new_width
+        self.cols = new_cols
 
         # Resize Y
-        offset_y = new_height - self.old_height
-        size_y = self.size * cls.y_spacing_factor
-        if offset_y > size_y:
+        old_rows = self.rows
+        new_rows = self.rows_visible()
+        if new_rows > old_rows:
             # Add more rows to the grid
-            num_new_rows = int(offset_y / size_y)
-            for j in range(self.rows, self.rows+num_new_rows):
+            for j in range(old_rows, new_rows):
                 for i in range(0, self.cols):
                     self.create_element(cls, i, j)
-            self.rows += num_new_rows
-            offset_y -= num_new_rows * size_y
-        elif offset_y < -size_y:
+        elif new_rows < old_rows:
             # Remove unneeded rows
-            num_removed_rows = int(-1 * offset_y / size_y)
-            for j in range(self.rows-num_removed_rows, self.rows):
+            for j in range(new_rows, old_rows):
                 for i in range(0, self.cols):
                     self.grid.remove(i, j)
-            self.rows -= num_removed_rows
-            offset_y += num_removed_rows * size_y
-        self.grid.y += offset_y/2.0
-        self.old_height = new_height
+        self.rows = new_rows
 
         # Re-add links in their new locations
         self.set_action(0, 0, self.prev_grid_type)
         self.set_action(self.cols-1, 0, self.next_grid_type)
 
     def on_resize(self, scene, event):
-        self._resize_grid(event.width, event.height)
+        self._resize_grid()
         self.grid.on_render(scene)
 
     def on_mouse_over(self, scene, sprite):
