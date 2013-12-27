@@ -17,6 +17,7 @@ class GridElement(object):
         self.stroke_width = args.get('stroke_width', 2)
         self.color_foreground = args.get('color_foreground', "#fff")
         self.color_stroke = args.get('color_stroke', "#000")
+        self.on_click = args.get('on_click', None)
         self.args = args
 
     def set_origin(self, x, y):
@@ -26,12 +27,12 @@ class GridElement(object):
     def create_sprite(self):
         t = GridElementSprite(self.i, self.j, self.width, self.height, **self.args)
         t.interactive = True
+        t.on_click = self.on_click
         t.connect('on-render', self.on_render)
         t.connect('on-mouse-over', self.on_over)
         t.connect('on-mouse-out', self.on_out)
-        on_click = self.args.get('on_click', None)
-        if on_click:
-            t.connect('on-click', on_click)
+        if t.on_click:
+            t.connect('on-click', t.on_click)
         return t
 
     def on_over(self, sprite):
@@ -39,7 +40,6 @@ class GridElement(object):
         tmp = self.color_foreground
         self.color_foreground = self.color_stroke
         self.color_stroke = tmp
-        print sprite.i, sprite.j, type(sprite)
 
     def on_out(self, sprite):
         if not sprite: return # ignore blank clicks
@@ -64,7 +64,7 @@ class GridElement(object):
 
 
 class GridElementSprite(graphics.Sprite):
-    def __init__(self, i, j, width=100, height=100, color_foreground="#333", color_stroke="#000", stroke_width=2, on_click=None):
+    def __init__(self, i, j, width=100, height=100, color_foreground="#333", color_stroke="#000", stroke_width=2):
         graphics.Sprite.__init__(self)
         self.i = i
         self.j = j
@@ -73,6 +73,7 @@ class GridElementSprite(graphics.Sprite):
         self.stroke_width = stroke_width
         self.color_foreground = color_foreground
         self.color_stroke = color_stroke
+        self.on_click = None
 
 
 class Grid(graphics.Sprite):
@@ -235,6 +236,7 @@ class Scene(graphics.Scene):
         return int( (h - 2*self.margin) / self.grid.y_spacing )
 
     def create_element(self, cls, i, j):
+        # TODO: Can I do the styling subsequently (and unify with set_action?)
         if j % 2 == i % 2:
             color = "#060"
         else:
@@ -247,15 +249,15 @@ class Scene(graphics.Scene):
 
     def set_action(self, i, j, on_click):
         e = self.grid.get(i, j)
-        if not e: return
-        e.args['on_click'] = on_click
-        if on_click:
+        if not e:
+            return
+        e.on_click = on_click
+        if e.on_click:
             e.color_foreground = "#0a0"
         elif j % 2 == i % 2:
             e.color_foreground = "#060"
         else:
             e.color_foreground = "#666"
-        e.args['color_foreground'] = e.color_foreground
 
     def create_grid(self, x, y, width, height):
         self.grid = Grid(x=x, y=y)
@@ -267,7 +269,6 @@ class Scene(graphics.Scene):
         self.cols = self.cols_visible()
         self.rows = self.rows_visible()
 
-        #print("Grid: %d x %d" %(self.cols, self.rows))
         for i in range(0, self.cols):
             for j in range(0, self.rows):
                 self.create_element(cls, i, j)
@@ -281,6 +282,7 @@ class Scene(graphics.Scene):
         cls = self.ELEMENT_CLASSES[self.element_number]
         for e in self.grid.elements():
             new_e = cls(e.i, e.j, self.size, self.size, **e.args)
+            new_e.on_click = e.on_click
             self.grid.set(e.i, e.j, new_e)
         self.grid.x_spacing = self.size * new_e.x_spacing_factor
         self.grid.y_spacing = self.size * new_e.y_spacing_factor
@@ -344,10 +346,9 @@ class Scene(graphics.Scene):
         tmp = sprite.color_foreground
         sprite.color_foreground = sprite.color_stroke
         sprite.color_stroke = tmp
-        print sprite.i, sprite.j, type(sprite)
 
     def on_mouse_out(self, scene, sprite):
-        if not sprite: return # ignore blank clicks
+        if not sprite: return
         tmp = sprite.color_foreground
         sprite.color_foreground = sprite.color_stroke
         sprite.color_stroke = tmp
