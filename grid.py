@@ -21,10 +21,12 @@ class GridElement(object):
         self.args = args
 
     def set_origin(self, x, y):
+        '''Move this element to the given x,y location'''
         self.graphic.x = x
         self.graphic.y = y
 
     def create_sprite(self):
+        '''Returns a new GridElementSprite for this element's location'''
         t = GridElementSprite(self.i, self.j, self.width, self.height, **self.args)
         t.interactive = True
         t.on_click = self.on_click
@@ -36,24 +38,22 @@ class GridElement(object):
         return t
 
     def on_over(self, sprite):
+        '''Highlight the cell element when hovering over the element'''
         if not sprite: return # ignore blank clicks
         tmp = self.color_foreground
         self.color_foreground = self.color_stroke
         self.color_stroke = tmp
 
     def on_out(self, sprite):
+        '''Unhighlight element when mouse no longer over the element'''
         if not sprite: return # ignore blank clicks
         tmp = self.color_foreground
         self.color_foreground = self.color_stroke
         self.color_stroke = tmp
 
     def on_render(self, sprite):
-        '''Draw the shape for this element
-
-        Override this with your own drawing code
-        '''
-        # TODO: Make this a required function to override
-        pass
+        '''Draw the shape for this element'''
+        assert False, "Override this with your own drawing code"
 
     @property
     def graphic(self):
@@ -105,12 +105,15 @@ class Grid(graphics.Sprite):
         return self.__elements[i][j]
 
     def set(self, i, j, e):
+        '''Insert element e at location i, j'''
         self.__elements[i][j] = e
 
     def remove(self, i, j):
+        '''Delete the element at the given i, j location'''
         del self.__elements[i][j]
 
     def on_render(self, widget):
+        '''Handler to render all elements in the grid'''
         x = 0
         y = 0
         self.graphics.clear()
@@ -124,8 +127,8 @@ class Grid(graphics.Sprite):
             y = 0
             x += self.x_spacing
 
-    # TODO: Maybe change this to an __iter__ and yield?
     def elements(self):
+        '''Sequentially yields all grid elements'''
         for row in self.__elements.values():
             for col in row.values():
                 yield col
@@ -198,6 +201,8 @@ class HexagonalGridElement(GridElement):
 
 
 class Scene(graphics.Scene):
+    '''
+    '''
     ELEMENT_CLASSES = [
         RectangularGridElement,
         HexagonalGridElement,
@@ -224,19 +229,21 @@ class Scene(graphics.Scene):
         self.create_grid(self.margin, self.margin, width-self.margin, height-self.margin)
 
     def cols_visible(self):
+        '''Calculate the number of cols that should fit in the current window dimensions'''
         w = self.width
         if w is None:
             w = self.old_width
         return int( (w - 2*self.margin) / self.grid.x_spacing )
 
     def rows_visible(self):
+        '''Calculate the number of cols that should fit in the current window dimensions'''
         h = self.height
         if h is None:
             h = self.old_height
         return int( (h - 2*self.margin) / self.grid.y_spacing )
 
     def create_element(self, cls, i, j):
-        # TODO: Can I do the styling subsequently (and unify with set_action?)
+        '''Create a sprite element of type cls at the given location'''
         if j % 2 == i % 2:
             color = "#060"
         else:
@@ -248,6 +255,7 @@ class Scene(graphics.Scene):
         self.grid.add(e)
 
     def set_action(self, i, j, on_click):
+        '''Hook a handler to the on-click event of the object at the given coordinates'''
         e = self.grid.get(i, j)
         if not e:
             return
@@ -260,6 +268,7 @@ class Scene(graphics.Scene):
             e.color_foreground = "#666"
 
     def create_grid(self, x, y, width, height):
+        '''Builds a new width x height sized grid at the given screen position'''
         self.grid = Grid(x=x, y=y)
         cls = self.ELEMENT_CLASSES[0]
         self.grid.x_spacing = self.size * cls.x_spacing_factor
@@ -278,6 +287,7 @@ class Scene(graphics.Scene):
         self.set_action(self.cols-1, 0, self.next_grid_type)
 
     def _set_grid_type(self, element_number):
+        '''Switch to different type of grid, and redraw'''
         self.element_number = element_number
         cls = self.ELEMENT_CLASSES[self.element_number]
         for e in self.grid.elements():
@@ -296,6 +306,7 @@ class Scene(graphics.Scene):
         self._set_grid_type( (self.element_number + 1) % len(self.ELEMENT_CLASSES))
 
     def _resize_grid(self):
+        '''Add or remove cols and rows to fill window'''
         cls = self.ELEMENT_CLASSES[self.element_number]
 
         # Remove all the links
